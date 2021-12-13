@@ -26,8 +26,6 @@ pub fn run_committer(
 
 
 
-
-
 ### handle_new_commit_task
 
 > 核心的方法则是 commit_block 

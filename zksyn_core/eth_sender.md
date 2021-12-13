@@ -84,21 +84,46 @@ async fn proceed_next_operations(&mut self,last_used_block:u64)->u64{
         }
     
     	//
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+        if last_used_block != current_block {
+            // Queue for storing all the operations that were not finished at this iteration.
+            let mut new_ongoing_ops = VecDeque::new();
+
+            // Commit the next operations (if any).
+            while let Some(mut current_op) = self.ongoing_ops.pop_front() {
+                
+                let commitment = match self
+                    .perform_commitment_step(&mut current_op, current_block)
+                    .await
+                {
+                    Ok(commitment) => commitment,
+                    Err(e) => {
+                        Self::process_error(e).await;
+                        OperationCommitment::Pending
+                    }
+                };
+
+                match commitment {
+                    OperationCommitment::Committed => {
+                        // Free a slot for the next tx in the queue.
+                        self.tx_queue.report_commitment();
+                    }
+                    OperationCommitment::Pending => {
+                        // Poll this operation on the next iteration.
+                        new_ongoing_ops.push_back(current_op);
+                    }
+                }
+            }
+            assert!(
+                self.ongoing_ops.is_empty(),
+                "Ongoing ops queue should be empty after draining"
+            );
+            // Store the ongoing operations for the next round.
+            self.ongoing_ops = new_ongoing_ops;
+        }
+
+        metrics::histogram!("eth_sender.proceed_next_operations", start.elapsed());
+        current_block
+
 }
 ```
 
